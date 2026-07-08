@@ -1,0 +1,6 @@
+{
+  "name": "Signed Bundle Automator",
+  "description": "An interactive automation and helper tool that guides you through taking an AI-developed application, configuring code signatures, creating keystores, automating gradle build configurations, and pointing you directly to your signed Android App Bundle (.aab).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
