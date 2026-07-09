@@ -20,6 +20,8 @@ export interface AnalysisRequest {
   keystoreConfig: KeystoreConfig;
   existingGradle?: string;
   existingProperties?: string;
+  useExistingKeystore?: boolean;
+  keystorePath?: string;
 }
 
 export interface ScriptOutput {

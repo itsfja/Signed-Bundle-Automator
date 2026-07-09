@@ -29,6 +29,8 @@ import {
   FolderOpen
 } from 'lucide-react';
 import { ProjectType, KeystoreConfig, AnalysisResponse, DiagnoseResponse } from './types';
+import { generateSigningConfig } from './utils/generator';
+import { diagnoseBuildError } from './utils/diagnostics';
 
 export default function App() {
   // Tabs: 'automator' | 'troubleshooter' | 'visualizer'
@@ -39,6 +41,8 @@ export default function App() {
   const [appName, setAppName] = useState('My AI Application');
   const [packageName, setPackageName] = useState('com.example.aiapp');
   const [existingGradle, setExistingGradle] = useState('');
+  const [useExistingKeystore, setUseExistingKeystore] = useState(false);
+  const [keystorePath, setKeystorePath] = useState('android/app/release-key.jks');
   
   // Keystore config state
   const [keystoreConfig, setKeystoreConfig] = useState<KeystoreConfig>({
@@ -112,24 +116,19 @@ export default function App() {
     setIsLoading(true);
     setApiError(null);
     try {
-      const response = await fetch('/api/signed-bundle/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectType,
-          appName,
-          packageName,
-          keystoreConfig,
-          existingGradle: existingGradle || undefined
-        })
+      // Simulate a brief delay to maintain the premium analytical UX feedback loop
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      
+      const result = generateSigningConfig({
+        projectType,
+        appName,
+        packageName,
+        keystoreConfig,
+        existingGradle: existingGradle || undefined,
+        useExistingKeystore,
+        keystorePath: useExistingKeystore ? keystorePath : undefined
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to analyze project signing requirements.');
-      }
-
-      const result = await response.json();
       setAnalysisResult(result);
       setOutputTab('guide'); // Reset to guide view
     } catch (err: any) {
@@ -145,22 +144,15 @@ export default function App() {
     setIsDiagnosing(true);
     setApiError(null);
     try {
-      const response = await fetch('/api/signed-bundle/diagnose', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectType: troubleProjectType,
-          errorLog,
-          keystoreConfig
-        })
+      // Simulate analysis delay for realistic UX feedback
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      
+      const result = diagnoseBuildError({
+        projectType: troubleProjectType,
+        errorLog,
+        keystoreConfig
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to diagnose the build error log.');
-      }
-
-      const result = await response.json();
       setDiagnoseResult(result);
     } catch (err: any) {
       console.error(err);
@@ -289,15 +281,15 @@ export default function App() {
               <Cpu className="w-4 h-4" />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">Gemini-Powered Android Release Automation</p>
+              <p className="text-sm font-semibold text-white">Secure Offline Android Release Automation</p>
               <p className="text-xs text-slate-400 mt-0.5">
-                Utilizes Gemini 3.5 Flash server-side integration to write bulletproof signing scripts. No API keys are requested or exposed in browser code.
+                Utilizes 100% self-contained client-side logic. Your private passwords, alias settings, and error logs are processed entirely in your browser and never sent over the network.
               </p>
             </div>
           </div>
-          <div className="text-xs font-mono px-3 py-1 bg-[#1A1A1A] border border-[#2D2D2D] rounded-full text-emerald-400 shadow-sm flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            ACTIVE: SERVER-SIDE
+          <div className="text-xs font-mono px-3 py-1 bg-[#1A1A1A] border border-[#2D2D2D] rounded-full text-indigo-400 shadow-sm flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+            ACTIVE: SECURE CLIENT-SIDE
           </div>
         </div>
 
@@ -307,9 +299,6 @@ export default function App() {
             <div className="text-sm">
               <span className="font-semibold">Generation Failed: </span>
               {apiError}
-              <div className="mt-2 text-xs font-mono text-rose-400">
-                Ensure process.env.GEMINI_API_KEY is configured in your AI Studio secrets environment.
-              </div>
             </div>
           </div>
         )}
@@ -405,6 +394,42 @@ export default function App() {
                           </button>
                         </div>
 
+                        {/* Existing Keystore Toggle Option */}
+                        <div className="mb-4 bg-[#0C0C0C] p-3 rounded-lg border border-[#1F1F1F] flex items-center justify-between">
+                          <div className="flex flex-col pr-2">
+                            <span className="text-2xs font-bold text-white uppercase tracking-wider">Use Existing Keystore (.jks)</span>
+                            <span className="text-[10px] text-slate-500 leading-normal">Configure gradle to sign with your pre-existing .jks keystore.</span>
+                          </div>
+                          <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                            <input
+                              type="checkbox"
+                              checked={useExistingKeystore}
+                              onChange={(e) => setUseExistingKeystore(e.target.checked)}
+                              className="sr-only peer"
+                            />
+                            <div className="w-9 h-5 bg-[#1F1F1F] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:bg-indigo-400 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-slate-500 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600/30 border border-[#2D2D2D] peer-checked:border-indigo-500"></div>
+                          </label>
+                        </div>
+
+                        {/* Existing Keystore File Path Input */}
+                        {useExistingKeystore && (
+                          <div className="mb-4 bg-[#141414] p-3 rounded-lg border border-[#1F1F1F] space-y-2">
+                            <label className="block text-2xs font-bold text-slate-300 uppercase tracking-wider">
+                              Keystore File Path / Location
+                            </label>
+                            <input
+                              type="text"
+                              value={keystorePath}
+                              onChange={(e) => setKeystorePath(e.target.value)}
+                              placeholder="e.g., /Users/username/keys/release-key.jks"
+                              className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                            />
+                            <p className="text-[10px] text-slate-500 leading-normal">
+                              Specify the path to your pre-existing <code className="text-indigo-400">.jks</code> file. This can be an absolute path on your PC or relative to the Android directory.
+                            </p>
+                          </div>
+                        )}
+
                         <div className="space-y-3">
                           <div>
                             <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
@@ -444,105 +469,109 @@ export default function App() {
                             </div>
                           </div>
 
-                          <div>
-                            <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                              Certificate Validity (Days)
-                            </label>
-                            <input
-                              type="number"
-                              value={keystoreConfig.validityDays}
-                              onChange={(e) => setKeystoreConfig({ ...keystoreConfig, validityDays: parseInt(e.target.value) || 10000 })}
-                              className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                          </div>
+                          {!useExistingKeystore && (
+                            <div>
+                              <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
+                                Certificate Validity (Days)
+                              </label>
+                              <input
+                                type="number"
+                                value={keystoreConfig.validityDays}
+                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, validityDays: parseInt(e.target.value) || 10000 })}
+                                className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
 
                       {/* Keystore Certificate Details (DName fields) */}
-                      <details className="group border border-[#1F1F1F] rounded-xl bg-[#0C0C0C] overflow-hidden transition-all duration-200">
-                        <summary className="flex items-center justify-between px-4 py-3 bg-[#0E0E0E] cursor-pointer select-none">
-                          <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                            Certificate Signature Info (DName)
-                          </span>
-                          <span className="text-slate-400 group-open:rotate-180 transition-transform duration-200 text-xs">▼</span>
-                        </summary>
-                        <div className="p-4 border-t border-[#1F1F1F] space-y-3 bg-[#0C0C0C]">
-                          <div>
-                            <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                              First & Last Name (Common Name - CN)
-                            </label>
-                            <input
-                              type="text"
-                              value={keystoreConfig.fullName}
-                              onChange={(e) => setKeystoreConfig({ ...keystoreConfig, fullName: e.target.value })}
-                              className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2">
+                      {!useExistingKeystore && (
+                        <details className="group border border-[#1F1F1F] rounded-xl bg-[#0C0C0C] overflow-hidden transition-all duration-200">
+                          <summary className="flex items-center justify-between px-4 py-3 bg-[#0E0E0E] cursor-pointer select-none">
+                            <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                              Certificate Signature Info (DName)
+                            </span>
+                            <span className="text-slate-400 group-open:rotate-180 transition-transform duration-200 text-xs">▼</span>
+                          </summary>
+                          <div className="p-4 border-t border-[#1F1F1F] space-y-3 bg-[#0C0C0C]">
                             <div>
                               <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                                Organizational Unit (OU)
+                                First & Last Name (Common Name - CN)
                               </label>
                               <input
                                 type="text"
-                                value={keystoreConfig.orgUnit}
-                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, orgUnit: e.target.value })}
+                                value={keystoreConfig.fullName}
+                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, fullName: e.target.value })}
                                 className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                               />
                             </div>
-                            <div>
-                              <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                                Organization (O)
-                              </label>
-                              <input
-                                type="text"
-                                value={keystoreConfig.organization}
-                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, organization: e.target.value })}
-                                className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              />
-                            </div>
-                          </div>
 
-                          <div className="grid grid-cols-3 gap-2">
-                            <div>
-                              <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                                City (L)
-                              </label>
-                              <input
-                                type="text"
-                                value={keystoreConfig.city}
-                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, city: e.target.value })}
-                                className="w-full px-2 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
+                                  Organizational Unit (OU)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={keystoreConfig.orgUnit}
+                                  onChange={(e) => setKeystoreConfig({ ...keystoreConfig, orgUnit: e.target.value })}
+                                  className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
+                                  Organization (O)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={keystoreConfig.organization}
+                                  onChange={(e) => setKeystoreConfig({ ...keystoreConfig, organization: e.target.value })}
+                                  className="w-full px-3 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                              </div>
                             </div>
-                            <div>
-                              <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                                State (ST)
-                              </label>
-                              <input
-                                type="text"
-                                value={keystoreConfig.state}
-                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, state: e.target.value })}
-                                className="w-full px-2 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
-                                Country Code (C)
-                              </label>
-                              <input
-                                type="text"
-                                maxLength={2}
-                                value={keystoreConfig.country}
-                                onChange={(e) => setKeystoreConfig({ ...keystoreConfig, country: e.target.value })}
-                                className="w-full px-2 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                              />
+
+                            <div className="grid grid-cols-3 gap-2">
+                              <div>
+                                <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
+                                  City (L)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={keystoreConfig.city}
+                                  onChange={(e) => setKeystoreConfig({ ...keystoreConfig, city: e.target.value })}
+                                  className="w-full px-2 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
+                                  State (ST)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={keystoreConfig.state}
+                                  onChange={(e) => setKeystoreConfig({ ...keystoreConfig, state: e.target.value })}
+                                  className="w-full px-2 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-2xs font-semibold text-slate-400 mb-0.5">
+                                  Country Code (C)
+                                </label>
+                                <input
+                                  type="text"
+                                  maxLength={2}
+                                  value={keystoreConfig.country}
+                                  onChange={(e) => setKeystoreConfig({ ...keystoreConfig, country: e.target.value })}
+                                  className="w-full px-2 py-1.5 border border-[#1F1F1F] rounded-md text-xs bg-[#0E0E0E] text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </details>
+                        </details>
+                      )}
 
                       {/* Optional Gradle Paste */}
                       <details className="group border border-[#1F1F1F] rounded-xl bg-[#0C0C0C] overflow-hidden">
@@ -555,7 +584,7 @@ export default function App() {
                         </summary>
                         <div className="p-4 border-t border-[#1F1F1F] space-y-2 bg-[#0C0C0C]">
                           <p className="text-2xs text-slate-400 mb-1">
-                            Paste your existing <code className="font-mono bg-[#141414] px-1 py-0.5 rounded text-indigo-400">android/app/build.gradle</code> file. Gemini will analyze it and inject the perfect signing configs block.
+                            Paste your existing <code className="font-mono bg-[#141414] px-1 py-0.5 rounded text-indigo-400">android/app/build.gradle</code> file. Our generator will analyze its structure and output the ideal signing configurations block.
                           </p>
                           <textarea
                             value={existingGradle}
@@ -605,8 +634,12 @@ export default function App() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-lg text-left">
                         <div className="border border-[#1F1F1F] bg-[#141414] p-4 rounded-xl">
                           <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Step 01</span>
-                          <h4 className="text-xs font-bold text-slate-200 mb-1">Generate JKS Key</h4>
-                          <p className="text-2xs text-slate-400">Create private cryptographic keystore containers safely via JDK keytool.</p>
+                          <h4 className="text-xs font-bold text-slate-200 mb-1">{useExistingKeystore ? "Verify JKS Key" : "Generate JKS Key"}</h4>
+                          <p className="text-2xs text-slate-400">
+                            {useExistingKeystore 
+                              ? "Inspect and verify your existing cryptographic key container details safely."
+                              : "Create private cryptographic keystore containers safely via JDK keytool."}
+                          </p>
                         </div>
                         <div className="border border-[#1F1F1F] bg-[#141414] p-4 rounded-xl">
                           <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest block mb-1">Step 02</span>
@@ -678,7 +711,7 @@ export default function App() {
                               <div className="flex items-center justify-between mb-2">
                                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                                   <Terminal className="w-5 h-5 text-indigo-400" />
-                                  Keystore Generation CLI
+                                  {useExistingKeystore ? "Keystore Verification CLI" : "Keystore Generation CLI"}
                                 </h3>
                                 <button
                                   onClick={() => triggerCopy(analysisResult.keystoreCommand, 'keytool')}
@@ -698,7 +731,9 @@ export default function App() {
                                 </button>
                               </div>
                               <p className="text-xs text-slate-400 mb-2">
-                                Open your system terminal, run this keytool command inside your project directory to generate the release cryptographic key container:
+                                {useExistingKeystore 
+                                  ? "Run this verification command in your project directory to inspect your existing keystore and confirm its alias:"
+                                  : "Open your system terminal, run this keytool command inside your project directory to generate the release cryptographic key container:"}
                               </p>
                               <div className="terminal-block p-4 rounded-lg text-xs break-all shadow-inner select-all leading-relaxed whitespace-pre-wrap font-mono border border-[#1F1F1F]">
                                 {analysisResult.keystoreCommand}
@@ -1160,7 +1195,7 @@ export default function App() {
                       </div>
                       <h3 className="text-xl font-bold text-white mb-2">Build & Signing Diagnostic Lab</h3>
                       <p className="text-sm text-slate-400 max-w-sm mx-auto mb-4">
-                        Pasted build logs are analyzed on-the-fly by the Gemini AI Build Engineer. Get custom remedies, correct gradle config scripts, and precise workarounds instantly.
+                        Pasted build logs are analyzed on-the-fly by our secure client-side Build Diagnostics engine. Get custom remedies, correct gradle config scripts, and precise workarounds instantly.
                       </p>
                       <span className="text-xs font-mono text-slate-500 bg-[#141414] border border-[#1F1F1F] px-2 py-1 rounded">
                         Paste a log on the left to activate diagnostics
@@ -1336,7 +1371,9 @@ export default function App() {
                       <div className="flex items-center space-x-2 border-b border-[#1F1F1F] pb-3">
                         <Key className="w-4 h-4 text-indigo-400" />
                         <span className="text-xs font-mono font-semibold text-slate-400">
-                          File: <span className="text-slate-200">release-key.jks</span> [Alias: {keystoreConfig.alias}]
+                          File: <span className="text-slate-200" title={useExistingKeystore ? keystorePath : undefined}>
+                            {useExistingKeystore ? (keystorePath.split('/').pop() || 'release-key.jks') : 'release-key.jks'}
+                          </span> [Alias: {keystoreConfig.alias}]
                         </span>
                       </div>
 
