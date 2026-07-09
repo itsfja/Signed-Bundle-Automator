@@ -22,6 +22,8 @@ export interface AnalysisRequest {
   existingProperties?: string;
   useExistingKeystore?: boolean;
   keystorePath?: string;
+  versionCode?: string;
+  versionName?: string;
 }
 
 export interface ScriptOutput {

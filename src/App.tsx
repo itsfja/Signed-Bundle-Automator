@@ -40,6 +40,8 @@ export default function App() {
   const [projectType, setProjectType] = useState<ProjectType>('flutter');
   const [appName, setAppName] = useState('My AI Application');
   const [packageName, setPackageName] = useState('com.example.aiapp');
+  const [versionCode, setVersionCode] = useState('1');
+  const [versionName, setVersionName] = useState('1.0.0');
   const [existingGradle, setExistingGradle] = useState('');
   const [useExistingKeystore, setUseExistingKeystore] = useState(false);
   const [keystorePath, setKeystorePath] = useState('android/app/release-key.jks');
@@ -126,7 +128,9 @@ export default function App() {
         keystoreConfig,
         existingGradle: existingGradle || undefined,
         useExistingKeystore,
-        keystorePath: useExistingKeystore ? keystorePath : undefined
+        keystorePath: useExistingKeystore ? keystorePath : undefined,
+        versionCode: versionCode || undefined,
+        versionName: versionName || undefined
       });
 
       setAnalysisResult(result);
@@ -373,6 +377,39 @@ export default function App() {
                             value={packageName}
                             onChange={(e) => setPackageName(e.target.value)}
                             placeholder="e.g. com.mycompany.app"
+                            className="w-full px-3 py-2 border border-[#1F1F1F] rounded-lg text-sm bg-[#0E0E0E] text-white focus:bg-[#141414] focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Play Store Version Configuration */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                            Version Name (Play Store)
+                          </label>
+                          <input
+                            type="text"
+                            value={versionName}
+                            onChange={(e) => setVersionName(e.target.value)}
+                            placeholder="e.g. 1.0.0"
+                            className="w-full px-3 py-2 border border-[#1F1F1F] rounded-lg text-sm bg-[#0E0E0E] text-white focus:bg-[#141414] focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                              Version Code
+                            </label>
+                            <span className="text-[10px] text-slate-500 normal-case">Must be integer</span>
+                          </div>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={versionCode}
+                            onChange={(e) => setVersionCode(e.target.value)}
+                            placeholder="e.g. 1"
                             className="w-full px-3 py-2 border border-[#1F1F1F] rounded-lg text-sm bg-[#0E0E0E] text-white focus:bg-[#141414] focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
                           />
                         </div>
