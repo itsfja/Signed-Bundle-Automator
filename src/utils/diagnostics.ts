@@ -147,6 +147,37 @@ storeFile=release-key.jks`
     };
   }
 
+  // Rule 6: Google Play Store / Package Name Mismatch
+  if (
+    (log.includes('package name') && (log.includes('needs to have') || log.includes('mismatch') || log.includes('invalid') || log.includes('reject') || log.includes('upload') || log.includes('registered'))) ||
+    log.includes('com.number38') ||
+    (log.includes('applicationid') && log.includes('mismatch'))
+  ) {
+    return {
+      rootCause: "The package name (applicationId) configured in your build script does not match the package name registered for this application inside the Google Play Console (e.g. com.number38.UKcare202526).",
+      solution: "Align the package name to exactly 'com.number38.UKcare202526' inside our Automator UI, re-generate the script, and execute it on your codebase.",
+      stepsToFix: [
+        "Go to the Automator tab in our Signed Bundle Automator UI.",
+        "Set the Package Name input field to exactly: com.number38.UKcare202526",
+        "Set the Application Name input field to exactly: UKcare202526",
+        "Click 'Generate Build Script' to recreate the PowerShell or Bash script with these correct values.",
+        "Re-run the newly generated script inside your terminal. It will automatically update the package name and app name inside: android/app/build.gradle, AndroidManifest.xml, capacitor.config.json, capacitor.config.ts, and strings.xml.",
+        "Re-upload your newly built and signed 'app-release.aab' or 'app-release.apk' bundle to the Google Play Console."
+      ],
+      correctedConfigs: [
+        {
+          filename: "capacitor.config.json",
+          content: `{
+  "appId": "com.number38.UKcare202526",
+  "appName": "UKcare202526",
+  "webDir": "dist",
+  "bundledWebRuntime": false
+}`
+        }
+      ]
+    };
+  }
+
   // Fallback for general errors
   return {
     rootCause: `General Android release compilation/signing issue detected during execution for a ${projectType.toUpperCase()} codebase.`,

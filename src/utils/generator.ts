@@ -372,44 +372,176 @@ if [ -n "$ANDROID_SDK_PATH" ]; then
     fi
 fi
 
-# 0.4. Play Store Version Configuration
-if [ "${projectType}" != "flutter" ] && [ "${projectType}" != "unity" ] && { [ -n "${versionCode || ''}" ] || [ -n "${versionName || ''}" ]; }; then
-    GRADLE_PATH="android/app/build.gradle"
-    if [ "${projectType}" = "native-android" ]; then
-        GRADLE_PATH="app/build.gradle"
-    elif [ "${projectType}" = "cordova" ]; then
-        GRADLE_PATH="platforms/android/app/build.gradle"
-    fi
-
-    if [ -f "$GRADLE_PATH" ]; then
-        echo "[VERSION] Injecting Play Store version updates..."
-        node -e "
+# 0.4. Play Store Version, Package Name & App Name Configuration
+if [ "${projectType}" != "flutter" ] && [ "${projectType}" != "unity" ] && { [ -n "${versionCode || ''}" ] || [ -n "${versionName || ''}" ] || [ -n "${packageName || ''}" ] || [ -n "${appName}" ]; }; then
+    echo "[CONFIG] Injecting Play Store version, package name, and app name updates..."
+    node -e "
 const fs = require('fs');
-const file = '$GRADLE_PATH';
-if (fs.existsSync(file)) {
-    let content = fs.readFileSync(file, 'utf8');
+
+// 1. Update Gradle Path
+const gradlePaths = ['android/app/build.gradle', 'app/build.gradle', 'platforms/android/app/build.gradle'];
+for (const file of gradlePaths) {
+    if (fs.existsSync(file)) {
+        let content = fs.readFileSync(file, 'utf8');
+        let updated = false;
+        if ('${packageName || ''}') {
+            if (content.match(/(applicationId\\s*=?\\s*)['\"][^'\"]*['\"]/)) {
+                content = content.replace(/(applicationId\\s*=?\\s*)['\"][^'\"]*['\"]/, '\\$1' + '"' + '${packageName || ''}' + '"');
+                updated = true;
+            }
+            if (content.match(/(namespace\\s*=?\\s*)['\"][^'\"]*['\"]/)) {
+                content = content.replace(/(namespace\\s*=?\\s*)['\"][^'\"]*['\"]/, '\\$1' + '"' + '${packageName || ''}' + '"');
+                updated = true;
+            }
+        }
+        if ('${versionCode || ''}') {
+            if (content.match(/(versionCode\\s*=?\\s*)\\d+/)) {
+                content = content.replace(/(versionCode\\s*=?\\s*)\\d+/, '\\$1' + '${versionCode || ''}');
+                updated = true;
+            }
+        }
+        if ('${versionName || ''}') {
+            if (content.match(/(versionName\\s*=?\\s*)['\"][^'\"]*['\"]/)) {
+                content = content.replace(/(versionName\\s*=?\\s*)['\"][^'\"]*['\"]/, '\\$1' + '"' + '${versionName || ''}' + '"');
+                updated = true;
+            }
+        }
+        if (updated) {
+            fs.writeFileSync(file, content, 'utf8');
+            console.log('[VERSION] Successfully updated package to \"' + '${packageName || ''}' + '\" and versions to ' + '${versionName || ''}' + ' (' + '${versionCode || ''}' + ') in ' + file);
+        }
+    }
+}
+
+// 2. Update Strings.xml (App Name)
+if ('${appName}') {
+    const stringsPaths = [
+        'android/app/src/main/res/values/strings.xml',
+        'app/src/main/res/values/strings.xml',
+        'platforms/android/app/src/main/res/values/strings.xml'
+    ];
+    for (const file of stringsPaths) {
+        if (fs.existsSync(file)) {
+            let content = fs.readFileSync(file, 'utf8');
+            const regex = /<string\\s+name=[\\"']app_name[\\"']>([^<]+)<\\/string>/i;
+            if (content.match(regex)) {
+                content = content.replace(regex, '<string name=\\\"app_name\\\">' + '${appName}' + '</string>');
+                fs.writeFileSync(file, content, 'utf8');
+                console.log('[APPNAME] Successfully updated app name to \"' + '${appName}' + '\" in ' + file);
+            }
+        }
+    }
+}
+
+// 3. Update capacitor.config.json
+const capJson = 'capacitor.config.json';
+if (fs.existsSync(capJson)) {
+    try {
+        let content = fs.readFileSync(capJson, 'utf8').trim();
+        if (content.length > 0 && content[0] !== '{') {
+            content = '{' + content;
+        }
+        let updated = false;
+        
+        if ('${packageName || ''}') {
+            if (content.match(/\"appId\"\s*:\s*(['\"])[^'\"]*([\'\"])/)) {
+                content = content.replace(/(\"appId\"\s*:\s*)(['\"])[^'\"]*([\'\"])/g, '\$1\$2' + '${packageName || ''}' + '\$3');
+                updated = true;
+            }
+        }
+        if ('${appName}') {
+            if (content.match(/\"appName\"\s*:\s*(['\"])[^'\"]*([\'\"])/)) {
+                content = content.replace(/(\"appName\"\s*:\s*)(['\"])[^'\"]*([\'\"])/g, '\$1\$2' + '${appName}' + '\$3');
+                updated = true;
+            }
+        }
+        
+        if (content.match(/\"bundledWebRuntime\"\s*:\s*(true|false)/)) {
+            content = content.replace(/(\"bundledWebRuntime\"\s*:\s*)(true|false)/g, '\$1' + 'false');
+            updated = true;
+        } else {
+            const lastBraceIndex = content.lastIndexOf('}');
+            if (lastBraceIndex !== -1) {
+                const sliceBefore = content.substring(0, lastBraceIndex).trim();
+                if (sliceBefore.endsWith(',')) {
+                    content = sliceBefore + '\n  \"bundledWebRuntime\": false\n}';
+                } else {
+                    content = sliceBefore + ',\n  \"bundledWebRuntime\": false\n}';
+                }
+                updated = true;
+            }
+        }
+        
+        if (updated) {
+            fs.writeFileSync(capJson, content, 'utf8');
+            console.log('[CAPACITOR] Successfully updated appId, appName, and bundledWebRuntime in ' + capJson);
+        } else {
+            let data = JSON.parse(content);
+            if ('${packageName || ''}') data.appId = '${packageName || ''}';
+            if ('${appName}') data.appName = '${appName}';
+            data.bundledWebRuntime = false;
+            fs.writeFileSync(capJson, JSON.stringify(data, null, 2), 'utf8');
+            console.log('[CAPACITOR] Successfully updated capacitor.config.json via JSON parsing');
+        }
+    } catch (e) {
+        console.log('[CAPACITOR] Error updating capacitor.config.json: ' + e.message);
+        try {
+            const freshConfig = {
+                appId: '${packageName || ''}' || 'com.number38.UKcare202526',
+                appName: '${appName}' || 'UKcare202526',
+                webDir: 'dist',
+                bundledWebRuntime: false
+            };
+            fs.writeFileSync(capJson, JSON.stringify(freshConfig, null, 2), 'utf8');
+            console.log('[CAPACITOR] Created fresh capacitor.config.json due to parse/regex failure');
+        } catch (err) {
+            console.log('[CAPACITOR] Error creating fresh config: ' + err.message);
+        }
+    }
+}
+
+// 4. Update capacitor.config.ts
+const capTs = 'capacitor.config.ts';
+if (fs.existsSync(capTs)) {
+    let content = fs.readFileSync(capTs, 'utf8');
     let updated = false;
-    if ('${versionCode || ''}') {
-        if (content.match(/versionCode\s+\d+/)) {
-            content = content.replace(/(versionCode\s+)\d+/, '\$1' + '${versionCode || ''}');
+    if ('${packageName || ''}') {
+        if (content.match(/appId\\s*:\\s*(['\"])[^'\"]*([\'\"])/)) {
+            content = content.replace(/(appId\\s*:\\s*)(['\"])[^'\"]*([\'\"])/, '\\$1\\$2' + '${packageName || ''}' + '\\$3');
             updated = true;
         }
     }
-    if ('${versionName || ''}') {
-        if (content.match(/versionName\s+(['\"])[^'\"]+(['\"])/)) {
-            content = content.replace(/(versionName\s+)(['\"])[^'\"]+(['\"])/, '\$1\$2' + '${versionName || ''}' + '\$3');
+    if ('${appName}') {
+        if (content.match(/appName\\s*:\\s*(['\"])[^'\"]*([\'\"])/)) {
+            content = content.replace(/(appName\\s*:\\s*)(['\"])[^'\"]*([\'\"])/, '\\$1\\$2' + '${appName}' + '\\$3');
             updated = true;
         }
     }
     if (updated) {
-        fs.writeFileSync(file, content, 'utf8');
-        console.log('[VERSION] Successfully updated version parameters in ' + file);
-    } else {
-        console.log('[VERSION] Version properties not found in standard defaultConfig format.');
+        fs.writeFileSync(capTs, content, 'utf8');
+        console.log('[CAPACITOR] Successfully updated appId to \"' + '${packageName || ''}' + '\" and appName to \"' + '${appName}' + '\" in ' + capTs);
+    }
+}
+
+// 5. Update AndroidManifest.xml (Package Name)
+if ('${packageName || ''}') {
+    const manifestPaths = [
+        'android/app/src/main/AndroidManifest.xml',
+        'app/src/main/AndroidManifest.xml',
+        'platforms/android/app/src/main/AndroidManifest.xml'
+    ];
+    for (const file of manifestPaths) {
+        if (fs.existsSync(file)) {
+            let content = fs.readFileSync(file, 'utf8');
+            if (content.match(/package\\s*=\\s*(['\"])[^'\"]+(['\"])/)) {
+                content = content.replace(/(package\\s*=\\s*)(['\"])[^'\"]+(['\"])/, '\\$1\\$2' + '${packageName || ''}' + '\\$3');
+                fs.writeFileSync(file, content, 'utf8');
+                console.log('[MANIFEST] Successfully updated package to \"' + '${packageName || ''}' + '\" in ' + file);
+            }
+        }
     }
 }
 "
-    fi
 fi
 
 # 1. Keystore Check/Creation
@@ -450,7 +582,28 @@ echo "[BUILD] Compiling Android Release App Bundle (.aab)..."
 ${projectType === 'unity' ? `echo "[WARNING] Unity builds must be triggered from within the Unity IDE. Please compile there!"` : `
 ${buildCommand}
 echo "[SUCCESS] Build finished successfully!"
-echo "[OUTPUT] Your signed bundle is located at: ${bundleLocation}"
+
+# 4. Guarantee Signing with Jarsigner
+echo "[SIGN] Verifying and ensuring the App Bundle (.aab) is signed..."
+JARSIGNER_PATH="jarsigner"
+if [ -n "$JAVA_HOME" ] && [ -x "$JAVA_HOME/bin/jarsigner" ]; then
+    JARSIGNER_PATH="$JAVA_HOME/bin/jarsigner"
+fi
+
+BundleFiles=$(find . -name "*.aab" -not -path "*/node_modules/*" -not -path "*/.gradle/*" -not -path "*/ios/*")
+if [ -n "$BundleFiles" ]; then
+    for f in $BundleFiles; do
+        echo "[SIGN] Signing app bundle: $f..."
+        "$JARSIGNER_PATH" -keystore "$KEYSTORE_PATH" -storepass "${keystoreConfig.storePassword || ''}" -keypass "${keystoreConfig.keyPassword || ''}" "$f" "${keystoreConfig.alias}"
+        echo "[SIGN] Verifying signature for $f..."
+        "$JARSIGNER_PATH" -verify -certs "$f"
+    done
+    echo "[SUCCESS] All Android App Bundles (.aab) have been signed and verified successfully!"
+else
+    echo "[WARNING] No .aab bundle file found to sign!"
+fi
+
+echo "[OUTPUT] Your final signed bundle is located at: ${bundleLocation}"
 `}
 `
     },
@@ -768,8 +921,9 @@ if ($AndroidSdkPath) {
     }
 }
 
-# 0.4. Play Store Version Configuration
-if ("${projectType}" -ne "flutter" -and "${projectType}" -ne "unity" -and ("${versionCode || ''}" -or "${versionName || ''}")) {
+# 0.4. Play Store Version, Package Name & App Name Configuration
+if ("${projectType}" -ne "flutter" -and "${projectType}" -ne "unity" -and ("${versionCode || ''}" -or "${versionName || ''}" -or "${packageName || ''}" -or "${appName}")) {
+    Write-Host "[CONFIG] Injecting Play Store version, package name, and app name updates..." -ForegroundColor Cyan
     $GradlePath = "android/app/build.gradle"
     if ("${projectType}" -eq "native-android") {
         $GradlePath = "app/build.gradle"
@@ -777,27 +931,182 @@ if ("${projectType}" -ne "flutter" -and "${projectType}" -ne "unity" -and ("${ve
         $GradlePath = "platforms/android/app/build.gradle"
     }
 
+    # Robust path detection: if we are inside the android folder, adjust path
+    if (-not (Test-Path $GradlePath) -and (Test-Path "app/build.gradle")) {
+        $GradlePath = "app/build.gradle"
+    }
+
     if (Test-Path $GradlePath) {
-        Write-Host "[VERSION] Injecting Play Store version updates..." -ForegroundColor Cyan
         $content = Get-Content $GradlePath -Raw
         $updated = $false
+
+        # Safe updating and healing by restoring corrupted lines and using literal .Replace() methods
+        # Restore versionCode if completely corrupted to $11, ${1}1, or similar (replaces entire line)
+        if ($content -match '(?m)^\\s*(\\$11|\\$\\{1\\}1|\\$1|\\$\\{1\\})\\s*$') {
+            $content = $content -replace '(?m)^\\s*(\\$11|\\$\\{1\\}1|\\$1|\\$\\{1\\})\\s*$', ('        versionCode ' + "${versionCode || '1'}")
+            $updated = $true
+        }
+
+        # Restore versionName if completely corrupted to $1"1.0", ${1}"1.0", or similar (replaces entire line)
+        if ($content -match '(?m)^\\s*(\\$1|\\$\\{1\\})\\s*"([0-9.]+)"\\s*$') {
+            $content = $content -replace '(?m)^\\s*(\\$1|\\$\\{1\\})\\s*"([0-9.]+)"\\s*$', ('        versionName "$2"')
+            $updated = $true
+        }
+
+        if ("${packageName || ''}") {
+            if ($content -match '(?i)(applicationId\\s*=?\\s*)[^\\r\\n]+') {
+                $oldLine = $Matches[0]
+                $newLine = $Matches[1] + '"' + "${packageName || ''}" + '"'
+                $content = $content.Replace($oldLine, $newLine)
+                $updated = $true
+            }
+            if ($content -match '(?i)(namespace\\s*=?\\s*)[^\\r\\n]+') {
+                $oldLine = $Matches[0]
+                $newLine = $Matches[1] + '"' + "${packageName || ''}" + '"'
+                $content = $content.Replace($oldLine, $newLine)
+                $updated = $true
+            }
+        }
         if ("${versionCode || ''}") {
-            if ($content -match 'versionCode\s+\d+') {
-                $content = $content -replace '(versionCode\s+)\d+', "\`$1${versionCode || ''}"
+            if ($content -match '(?i)(versionCode\\s*=?\\s*)[^\\r\\n]+') {
+                $oldLine = $Matches[0]
+                $newLine = $Matches[1] + "${versionCode || ''}"
+                $content = $content.Replace($oldLine, $newLine)
                 $updated = $true
             }
         }
         if ("${versionName || ''}") {
-            if ($content -match 'versionName\s+([''"])[^''"]+([''"])') {
-                $content = $content -replace '(versionName\s+)([''"])[^''"]+([''"])', "\`$1\`$2${versionName || ''}\`$3"
+            if ($content -match '(?i)(versionName\\s*=?\\s*)[^\\r\\n]+') {
+                $oldLine = $Matches[0]
+                $newLine = $Matches[1] + '"' + "${versionName || ''}" + '"'
+                $content = $content.Replace($oldLine, $newLine)
                 $updated = $true
             }
         }
         if ($updated) {
             Set-Content -Path $GradlePath -Value $content -Force
-            Write-Host "[VERSION] Successfully updated version parameters in $GradlePath" -ForegroundColor Green
-        } else {
-            Write-Host "[VERSION] Version properties not found in standard defaultConfig format." -ForegroundColor Yellow
+            Write-Host "[VERSION] Successfully updated package to \`"${packageName || ''}\`" and versions to ${versionName || ''} (${versionCode || ''}) in $GradlePath" -ForegroundColor Green
+        }
+    }
+
+    # 2. Update Strings.xml (App Name)
+    if ("${appName}") {
+        $StringsPaths = @(
+            "android/app/src/main/res/values/strings.xml",
+            "app/src/main/res/values/strings.xml",
+            "platforms/android/app/src/main/res/values/strings.xml"
+        )
+        foreach ($path in $StringsPaths) {
+            if (Test-Path $path) {
+                $content = Get-Content $path -Raw
+                if ($content -match '<string\s+name=.app_name.>([^<]+)</string>') {
+                    $content = $content -replace '<string\s+name=.app_name.>([^<]+)</string>', ('<string name="app_name">' + "${appName}" + '</string>')
+                    Set-Content -Path $path -Value $content -Force
+                    Write-Host "[APPNAME] Successfully updated app name to \`"${appName}\`" in $path" -ForegroundColor Green
+                }
+            }
+        }
+    }
+
+    # 3. Update capacitor.config.json
+    $CapJson = "capacitor.config.json"
+    if (Test-Path $CapJson) {
+        try {
+            $content = (Get-Content $CapJson -Raw).Trim()
+            if ($content -and ($content.Substring(0, 1) -ne "{")) {
+                $content = "{" + $content
+            }
+            $updated = $false
+            if ("${packageName || ''}") {
+                if ($content -match '"appId"\s*:\s*"[^"]*"') {
+                    $content = $content -replace '("appId"\s*:\s*")[^"]*(")', ('$1' + "${packageName || ''}" + '$2')
+                    $updated = $true
+                }
+            }
+            if ("${appName}") {
+                if ($content -match '"appName"\s*:\s*"[^"]*"') {
+                    $content = $content -replace '("appName"\s*:\s*")[^"]*(")', ('$1' + "${appName}" + '$2')
+                    $updated = $true
+                }
+            }
+            if ($content -match '"bundledWebRuntime"\s*:\s*(true|false)') {
+                $content = $content -replace '("bundledWebRuntime"\s*:\s*)(true|false)', '$1false'
+                $updated = $true
+            } else {
+                $lastBraceIndex = $content.LastIndexOf('}')
+                if ($lastBraceIndex -ne -1) {
+                    $sliceBefore = $content.Substring(0, $lastBraceIndex).Trim()
+                    if ($sliceBefore.EndsWith(",")) {
+                        $content = $sliceBefore + "\`n  \`"bundledWebRuntime\`": false\`n}"
+                    } else {
+                        $content = $sliceBefore + ",\`n  \`"bundledWebRuntime\`": false\`n}"
+                    }
+                    $updated = $true
+                }
+            }
+            if ($updated) {
+                Set-Content -Path $CapJson -Value $content -Force
+                Write-Host "[CAPACITOR] Successfully updated appId, appName, and bundledWebRuntime in $CapJson" -ForegroundColor Green
+            } else {
+                $json = $content | ConvertFrom-Json
+                if ("${packageName || ''}") { $json.appId = "${packageName || ''}" }
+                if ("${appName}") { $json.appName = "${appName}" }
+                $json.bundledWebRuntime = $false
+                $json | ConvertTo-Json -Depth 10 | Set-Content -Path $CapJson -Force
+                Write-Host "[CAPACITOR] Successfully updated capacitor.config.json via JSON conversion" -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "Failed regex/JSON parse of $CapJson. Writing a fresh file..."
+            $freshJson = @{
+                appId = if ("${packageName || ''}") { "${packageName || ''}" } else { "com.number38.UKcare202526" }
+                appName = if ("${appName}") { "${appName}" } else { "UKcare202526" }
+                webDir = "dist"
+                bundledWebRuntime = $false
+            }
+            $freshJson | ConvertTo-Json -Depth 10 | Set-Content -Path $CapJson -Force
+            Write-Host "[CAPACITOR] Successfully wrote fresh $CapJson" -ForegroundColor Green
+        }
+    }
+
+    # 4. Update capacitor.config.ts
+    $CapTs = "capacitor.config.ts"
+    if (Test-Path $CapTs) {
+        $content = Get-Content $CapTs -Raw
+        $updated = $false
+        if ("${packageName || ''}") {
+            if ($content -match 'appId\\s*:\\s*[''"][^''"]*[''"]') {
+                $content = $content -replace '(appId\\s*:\\s*[''"])[^''"]*([''"])', ('$1' + "${packageName || ''}" + '$2')
+                $updated = $true
+            }
+        }
+        if ("${appName}") {
+            if ($content -match 'appName\\s*:\\s*[''"][^''"]*[''"]') {
+                $content = $content -replace '(appName\\s*:\\s*[''"])[^''"]*([''"])', ('$1' + "${appName}" + '$2')
+                $updated = $true
+            }
+        }
+        if ($updated) {
+            Set-Content -Path $CapTs -Value $content -Force
+            Write-Host "[CAPACITOR] Successfully updated appId to \`"${packageName || ''}\`" and appName to \`"${appName}\`" in $CapTs" -ForegroundColor Green
+        }
+    }
+
+    # 5. Update AndroidManifest.xml (Package Name)
+    if ("${packageName || ''}") {
+        $ManifestPaths = @(
+            "android/app/src/main/AndroidManifest.xml",
+            "app/src/main/AndroidManifest.xml",
+            "platforms/android/app/src/main/AndroidManifest.xml"
+        )
+        foreach ($path in $ManifestPaths) {
+            if (Test-Path $path) {
+                $content = Get-Content $path -Raw
+                if ($content -match 'package\\s*=\\s*[''"][^''"]*[''"]') {
+                    $content = $content -replace '(package\\s*=\\s*[''"])[^''"]*([''"])', ('$1' + "${packageName || ''}" + '$2')
+                    Set-Content -Path $path -Value $content -Force
+                    Write-Host "[MANIFEST] Successfully updated package to \`"${packageName || ''}\`" in $path" -ForegroundColor Green
+                }
+            }
         }
     }
 }
@@ -847,7 +1156,35 @@ Write-Host "[BUILD] Compiling Android Release App Bundle (.aab)..." -ForegroundC
 ${projectType === 'unity' ? `Write-Host "[WARNING] Unity builds must be triggered from within the Unity IDE. Please compile there!" -ForegroundColor Yellow` : `
 ${psBuildCommand}
 Write-Host "[SUCCESS] Build finished successfully!" -ForegroundColor Green
-Write-Host "[OUTPUT] Your signed bundle is located at: ${bundleLocation}" -ForegroundColor Green
+
+# 4. Guarantee Signing with Jarsigner
+Write-Host "[SIGN] Verifying and ensuring the App Bundle (.aab) is signed..." -ForegroundColor Cyan
+$JarsignerExe = "jarsigner.exe"
+if ($javaExe) {
+    $JarsignerExe = $javaExe.ToLower().Replace("java.exe", "jarsigner.exe")
+}
+
+$BundleFiles = Get-ChildItem -Path . -Filter "*.aab" -Recurse | Where-Object { $_.FullName -notmatch "node_modules" -and $_.FullName -notmatch "\.gradle" -and $_.FullName -notmatch "ios" }
+
+if ($BundleFiles) {
+    foreach ($file in $BundleFiles) {
+        $filePath = $file.FullName
+        Write-Host "[SIGN] Signing app bundle: $filePath..." -ForegroundColor Cyan
+        & $JarsignerExe -keystore $KeystorePath -storepass "${keystoreConfig.storePassword || ''}" -keypass "${keystoreConfig.keyPassword || ''}" $filePath "${keystoreConfig.alias}"
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[SIGN] Successfully signed $filePath" -ForegroundColor Green
+            Write-Host "[SIGN] Verifying signature..." -ForegroundColor Cyan
+            & $JarsignerExe -verify -certs $filePath
+        } else {
+            Write-Warning "Failed to sign $filePath with jarsigner. Please ensure your keystore password is correct."
+        }
+    }
+    Write-Host "[SUCCESS] All Android App Bundles (.aab) have been signed and verified successfully!" -ForegroundColor Green
+} else {
+    Write-Warning "No .aab bundle file found to sign!"
+}
+
+Write-Host "[OUTPUT] Your final signed bundle is located at: ${bundleLocation}" -ForegroundColor Green
 `}
 `
     }

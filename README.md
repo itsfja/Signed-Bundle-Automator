@@ -40,28 +40,28 @@ To compile Android binaries, Gradle needs to know where your Android SDK is loca
 
 ---
 
-### Step 3: Configure Play Store Versions in the Automator UI
-You can now set custom version parameters directly inside the app before generating your script:
+### Step 3: Configure Play Store Versions & Package Name in the Automator UI
+You can set custom version parameters and your registered Google Play package name directly inside the app before generating your script:
 
-1. **Version Name**: The user-visible version string (e.g., `1.0.0` or `1.1.2`).
-2. **Version Code**: A positive integer that increments with every Play Store update (e.g., `1`, `2`, `3`).
-3. **How it works**: 
+1. **Package Name**: Enter your exact Google Play package name (e.g. `com.number38.UKcare202526`).
+2. **Version Name**: The user-visible version string (e.g., `1.0.0` or `1.1.2`).
+3. **Version Code**: A positive integer that increments with every Play Store update (e.g., `1`, `2`, `3`).
+4. **How it works**: 
+   * **Automated Package Sync**: For **Capacitor / React Native / Native Android** projects, our generated script automatically parses your `android/app/build.gradle` file and updates the `applicationId` to match your specified package name (`com.number38.UKcare202526`), as well as configuring the `versionCode` and `versionName` parameters inside your `defaultConfig` section.
    * For **Flutter** projects, these values are automatically injected as command-line arguments: `--build-name=1.0.0 --build-number=1`.
-   * For **Capacitor / React Native / Native Android** projects, the script automatically parses your `android/app/build.gradle` file and updates the `versionCode` and `versionName` parameters inside your `defaultConfig` section.
 
 ---
 
-### Step 4: Run the Generated Script
-1. Paste the generated PowerShell script (`automate-release.ps1`) into your project's root folder.
-2. Open PowerShell as an administrator or within your terminal inside your project.
+### Step 4: Run the Generated Script and Automatic Signing
+1. Paste the generated PowerShell script (`automate-release.ps1`) or Bash script (`automate-release.sh`) into your project's root folder.
+2. Open PowerShell as an administrator (or terminal on macOS/Linux) inside your project.
 3. Execute the script:
    ```powershell
    .\automate-release.ps1
    ```
-4. The script will:
-   * Verify and bind your JDK and Android SDK.
-   * Create or locate a secure release Keystore.
-   * Inject and update your version parameters in `build.gradle`.
-   * Build, align, and sign a release-ready `.aab` file!
+4. **The Automator's Secret Weapon (Auto-Signing)**:
+   * Normally, if your `build.gradle` file isn't perfectly modified, Gradle produces an **unsigned** App Bundle (`.aab`), which Google Play Console rejects.
+   * **Our updated scripts solve this automatically!** After compiling your App Bundle, the script dynamically scans your build output directories for `.aab` files and signs them directly using your JDK's **`jarsigner`** utility.
+   * It then runs a cryptographic verification pass to guarantee that the signature is completely valid and accepted by Google Play.
 
-Your finished `.aab` bundle will be ready for upload to the Google Play Console! 🎉
+Your finished, signed `.aab` bundle will be ready for immediate upload to the Google Play Console! 🎉

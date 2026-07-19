@@ -37,18 +37,18 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'automator' | 'troubleshooter' | 'visualizer'>('automator');
 
   // Input states for Automator
-  const [projectType, setProjectType] = useState<ProjectType>('flutter');
-  const [appName, setAppName] = useState('My AI Application');
-  const [packageName, setPackageName] = useState('com.example.aiapp');
+  const [projectType, setProjectType] = useState<ProjectType>('capacitor');
+  const [appName, setAppName] = useState('UKcare202526');
+  const [packageName, setPackageName] = useState('com.number38.UKcare202526');
   const [versionCode, setVersionCode] = useState('1');
   const [versionName, setVersionName] = useState('1.0.0');
   const [existingGradle, setExistingGradle] = useState('');
-  const [useExistingKeystore, setUseExistingKeystore] = useState(false);
-  const [keystorePath, setKeystorePath] = useState('android/app/release-key.jks');
+  const [useExistingKeystore, setUseExistingKeystore] = useState(true);
+  const [keystorePath, setKeystorePath] = useState('I:\\My Drive\\developer\\keys\\keystore');
   
   // Keystore config state
   const [keystoreConfig, setKeystoreConfig] = useState<KeystoreConfig>({
-    alias: 'release-key',
+    alias: 'key0',
     keyPassword: 'mysecurepassword123',
     storePassword: 'mysecurepassword123',
     validityDays: 10000,
@@ -77,7 +77,7 @@ export default function App() {
   const [copiedText, setCopiedText] = useState<string | null>(null);
 
   // Troubleshooter states
-  const [troubleProjectType, setTroubleProjectType] = useState<ProjectType>('flutter');
+  const [troubleProjectType, setTroubleProjectType] = useState<ProjectType>('capacitor');
   const [errorLog, setErrorLog] = useState('');
   const [isDiagnosing, setIsDiagnosing] = useState(false);
   const [diagnoseResult, setDiagnoseResult] = useState<DiagnoseResponse | null>(null);
