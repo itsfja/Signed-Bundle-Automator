@@ -541,6 +541,96 @@ if ('${packageName || ''}') {
         }
     }
 }
+
+// 6. Update Java/Kotlin Package Declarations & Move Files to Match Structure
+if ('${packageName || ''}') {
+    const javaRoots = [
+        'android/app/src/main/java',
+        'app/src/main/java',
+        'platforms/android/app/src/main/java'
+    ];
+    const path = require('path');
+    
+    const getFiles = (dir) => {
+        let results = [];
+        if (!fs.existsSync(dir)) return results;
+        const list = fs.readdirSync(dir);
+        list.forEach((file) => {
+            const fullPath = path.join(dir, file);
+            const stat = fs.statSync(fullPath);
+            if (stat && stat.isDirectory()) {
+                results = results.concat(getFiles(fullPath));
+            } else {
+                if (file.endsWith('.java') || file.endsWith('.kt')) {
+                    results.push(fullPath);
+                }
+            }
+        });
+        return results;
+    };
+
+    const cleanEmptyDirs = (dir) => {
+        if (!fs.existsSync(dir)) return;
+        const list = fs.readdirSync(dir);
+        list.forEach((file) => {
+            const fullPath = path.join(dir, file);
+            if (fs.statSync(fullPath).isDirectory()) {
+                cleanEmptyDirs(fullPath);
+            }
+        });
+        if (fs.readdirSync(dir).length === 0) {
+            fs.rmdirSync(dir);
+            console.log('[JAVA] Removed empty directory: ' + dir);
+        }
+    };
+
+    for (const javaRoot of javaRoots) {
+        if (fs.existsSync(javaRoot)) {
+            console.log('[JAVA] Inspecting Java/Kotlin sources in ' + javaRoot + '...');
+            const files = getFiles(javaRoot);
+            const targetSubDir = '${packageName || ''}'.replace(/\\./g, '/');
+            const targetDir = path.join(javaRoot, targetSubDir);
+            
+            for (const file of files) {
+                let content = fs.readFileSync(file, 'utf8');
+                const pkgRegex = /^package\\s+([a-zA-Z0-9_.]+)(\\s*;?)/m;
+                const match = content.match(pkgRegex);
+                if (match) {
+                    const oldPackage = match[1];
+                    let contentChanged = false;
+                    const hasSemicolon = match[2].includes(';');
+                    if (oldPackage !== '${packageName || ''}' || !hasSemicolon) {
+                        console.log('[JAVA] Updating package in ' + path.basename(file) + ' from ' + oldPackage + ' to ' + '${packageName || ''};');
+                        content = content.replace(pkgRegex, 'package ' + '${packageName || ''}' + ';');
+                        fs.writeFileSync(file, content, 'utf8');
+                        contentChanged = true;
+                    }
+                    
+                    const newFilePath = path.join(targetDir, path.basename(file));
+                    if (file !== newFilePath) {
+                        if (!fs.existsSync(targetDir)) {
+                            fs.mkdirSync(targetDir, { recursive: true });
+                        }
+                        console.log('[JAVA] Moving ' + path.basename(file) + ' to ' + newFilePath);
+                        fs.renameSync(file, newFilePath);
+                    }
+                }
+            }
+            cleanEmptyDirs(javaRoot);
+            
+            console.log('[JAVA] Verification of package structure in ' + javaRoot + ':');
+            const finalFiles = getFiles(javaRoot);
+            if (finalFiles.length === 0) {
+                console.log('   (No Java/Kotlin source files found)');
+            } else {
+                finalFiles.forEach(f => {
+                    console.log('   - File: ' + f);
+                });
+            }
+        }
+    }
+}
+
 "
 fi
 
@@ -1105,6 +1195,72 @@ if ("${projectType}" -ne "flutter" -and "${projectType}" -ne "unity" -and ("${ve
                     $content = $content -replace '(package\\s*=\\s*[''"])[^''"]*([''"])', ('$1' + "${packageName || ''}" + '$2')
                     Set-Content -Path $path -Value $content -Force
                     Write-Host "[MANIFEST] Successfully updated package to \`"${packageName || ''}\`" in $path" -ForegroundColor Green
+                }
+            }
+        }
+    }
+
+    # 6. Update Java/Kotlin Package Declarations & Move Files to Match Structure
+    if ("${packageName || ''}") {
+        $JavaRoots = @(
+            "android/app/src/main/java",
+            "app/src/main/java",
+            "platforms/android/app/src/main/java"
+        )
+        foreach ($javaRoot in $JavaRoots) {
+            if (Test-Path $javaRoot) {
+                Write-Host "[JAVA] Inspecting Java/Kotlin sources in $javaRoot..." -ForegroundColor Cyan
+                $files = @(Get-ChildItem -Path $javaRoot -Filter "*.java" -Recurse -ErrorAction SilentlyContinue)
+                $files += @(Get-ChildItem -Path $javaRoot -Filter "*.kt" -Recurse -ErrorAction SilentlyContinue)
+                $files = $files | Where-Object { $_ -ne $null }
+                
+                $targetSubDir = "${packageName || ''}".Replace(".", [char]92)
+                $targetDir = Join-Path $javaRoot $targetSubDir
+                
+                foreach ($file in $files) {
+                    $filePath = $file.FullName
+                    $content = Get-Content $filePath -Raw
+                    if ($content -match '(?m)^package\\s+([a-zA-Z0-9_.]+)(\\s*;?)') {
+                        $oldPackage = $Matches[1]
+                        $hasSemicolon = $Matches[2] -like "*;*"
+                        if ($oldPackage -ne "${packageName || ''}" -or -not $hasSemicolon) {
+                            Write-Host "[JAVA] Updating package in file: $($file.Name) from $oldPackage to ${packageName || ''};" -ForegroundColor Yellow
+                            $content = $content -replace '(?m)^package\\s+[a-zA-Z0-9_.]+(\\s*;?)', "package ${packageName || ''};"
+                            Set-Content -Path $filePath -Value $content -Force
+                        }
+                        
+                        # Move to new package directory structure
+                        if (-not (Test-Path $targetDir)) {
+                            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+                        }
+                        $newFilePath = Join-Path $targetDir $file.Name
+                        if ($filePath -ne $newFilePath) {
+                            Write-Host "[JAVA] Moving $($file.Name) to $newFilePath" -ForegroundColor Yellow
+                            Move-Item -Path $filePath -Destination $newFilePath -Force
+                        }
+                    }
+                }
+                
+                # Clean up empty old directory trees
+                $subDirs = Get-ChildItem -Path $javaRoot -Directory -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName -Descending
+                foreach ($dir in $subDirs) {
+                    if ((Get-ChildItem -Path $dir.FullName -Force -ErrorAction SilentlyContinue).Count -eq 0) {
+                        Write-Host "[JAVA] Removing empty directory: $($dir.FullName)" -ForegroundColor Gray
+                        Remove-Item -Path $dir.FullName -Force -ErrorAction SilentlyContinue
+                    }
+                }
+                
+                # Verify and print final source files
+                Write-Host "[JAVA] Verification of package structure in \$($javaRoot):" -ForegroundColor Green
+                $finalFiles = @(Get-ChildItem -Path $javaRoot -Filter "*.java" -Recurse -ErrorAction SilentlyContinue)
+                $finalFiles += @(Get-ChildItem -Path $javaRoot -Filter "*.kt" -Recurse -ErrorAction SilentlyContinue)
+                $finalFiles = $finalFiles | Where-Object { $_ -ne $null }
+                if ($finalFiles.Count -eq 0) {
+                    Write-Host "   (No Java/Kotlin source files found)" -ForegroundColor Gray
+                } else {
+                    foreach ($f in $finalFiles) {
+                        Write-Host "   - File: $($f.FullName)" -ForegroundColor Green
+                    }
                 }
             }
         }
